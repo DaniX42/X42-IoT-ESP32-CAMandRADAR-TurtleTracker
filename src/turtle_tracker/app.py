@@ -7,13 +7,22 @@ import numpy as np
 from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse
 
-from .calibration import HomographyCalibration
+from .calibration import HomographyCalibration, RadarCalibration
 from .config import Settings, get_settings
 from .db import Database, row_to_dict
-from .models import HeatmapPoint, IngestResponse, MotionCrop, MotionCropLabel, MotionCropLabelBatch, MotionCropPage, Position
+from .models import (
+    HeatmapPoint,
+    IngestResponse,
+    MotionCrop,
+    MotionCropLabel,
+    MotionCropLabelBatch,
+    MotionCropPage,
+    Position,
+    RadarFrame,
+)
 from .mock import mock_jpeg
 from .mqtt import MqttPublisher
-from .tracking import DoorCrossingTracker, PositionTracker
+from .tracking import DoorCrossingTracker, PositionTracker, RadarPositionTracker
 from .vision import (
     Detection,
     MotionDetector,
@@ -139,6 +148,13 @@ def create_app(settings: Settings | None = None, database: Database | None = Non
     )
     detector = MotionDetector()
     tracker = PositionTracker(calibration, settings.enclosure_length_meters, settings.enclosure_width_meters)
+    radar_calibration = RadarCalibration(
+        settings.enclosure_width_meters,
+        settings.radar_offset_length_meters,
+        settings.radar_offset_width_meters,
+        settings.radar_mirror_width,
+    )
+    radar_tracker = RadarPositionTracker(settings.enclosure_length_meters, settings.enclosure_width_meters)
     door_tracker = DoorCrossingTracker()
     house_state = {"inside_house": False}
     mqtt_publisher = MqttPublisher(
@@ -509,6 +525,31 @@ load();
         if not settings.mock_images_enabled:
             raise HTTPException(status_code=404, detail="Mock images are disabled")
         return await process_frame("mock", mock_jpeg())
+
+    @app.post("/api/radar/{camera_id}", response_model=IngestResponse)
+    async def ingest_radar(camera_id: str, frame: RadarFrame) -> IngestResponse:
+        if not camera_id.strip():
+            raise HTTPException(status_code=400, detail="camera_id is required")
+        if not frame.targets:
+            return IngestResponse(accepted=False, reason="No radar target detected")
+        target = frame.targets[0]
+        x, y = radar_calibration.target_to_meters(target.x_mm, target.y_mm)
+        timestamp = _utc_now()
+        track = radar_tracker.update(x, y, timestamp)
+        position = Position(
+            timestamp=timestamp,
+            x=track.x,
+            y=track.y,
+            inside_house=house_state["inside_house"],
+            speed=track.speed,
+            confidence=1.0,
+            source="radar",
+        )
+        database.insert_position(
+            timestamp.isoformat(), position.x, position.y, position.inside_house, position.speed, position.confidence, "radar"
+        )
+        mqtt_publisher.publish_position(position.x, position.y, position.speed, position.confidence)
+        return IngestResponse(accepted=True, position=position)
 
     return app
 

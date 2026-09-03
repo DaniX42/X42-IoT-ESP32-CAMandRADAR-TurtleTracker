@@ -2,6 +2,16 @@
 
 The firmware targets the AI Thinker ESP32-CAM and captures a VGA JPEG every five seconds. Each frame is posted to the backend at `/api/frames/{camera_id}`.
 
+## HLK-LD2450 radar (optional)
+
+An HLK-LD2450 mmWave radar can be wired next to the outdoor camera to complement motion detection with a direct, lighting-independent position and speed reading. The firmware reads it on UART2:
+
+- LD2450 **TX** -> ESP32-CAM **GPIO16** (UART2 RX)
+- LD2450 **RX** -> ESP32-CAM **GPIO17** (UART2 TX, only needed if you send configuration commands to the sensor)
+- LD2450 **VIN** -> **5V**, LD2450 **GND** -> **GND**
+
+Both GPIO16 and GPIO17 are unused by the AI Thinker ESP32-CAM camera pinout, so no pin conflicts occur. The sensor's default baud rate is 256000, 8N1, matching the firmware's `radarSerial.begin(...)` call. Every second, the firmware parses the LD2450's binary target frames and posts the first tracked target to `/api/radar/{camera_id}` as JSON; see `docs/api.md`. If no sensor is wired, the RX pin stays idle and no radar frames are ever recognized, so the rest of the firmware is unaffected.
+
 ## Features
 
 - Wi-Fi station mode

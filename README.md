@@ -1,6 +1,6 @@
 # Turtle Tracker
 
-A camera-based position tracking service for one untagged tortoise in a 7 m x 2.5 m outdoor enclosure. The system combines an ESP32-CAM, a Python computer-vision backend, SQLite storage, and MQTT/Home Assistant integration.
+A camera-based position tracking service for one untagged tortoise in a 7 m x 2.5 m outdoor enclosure. The system combines an ESP32-CAM, an optional HLK-LD2450 mmWave radar, a Python computer-vision backend, SQLite storage, and MQTT/Home Assistant integration.
 
 ## Example images
 

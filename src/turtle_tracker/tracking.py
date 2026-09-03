@@ -13,6 +13,19 @@ class Track:
     speed: float = 0.0
 
 
+def _clamp_and_track(
+    previous: Track | None, x: float, y: float, timestamp: datetime, enclosure_length: float, enclosure_width: float
+) -> Track:
+    # Clamp coordinates to valid enclosure range
+    x = min(max(x, 0.0), enclosure_length)
+    y = min(max(y, 0.0), enclosure_width)
+    speed = 0.0
+    if previous:
+        elapsed = max((timestamp - previous.timestamp).total_seconds(), 0.001)
+        speed = ((x - previous.x) ** 2 + (y - previous.y) ** 2) ** 0.5 / elapsed
+    return Track(x, y, timestamp, speed)
+
+
 class PositionTracker:
     def __init__(self, calibration: HomographyCalibration, enclosure_length: float = 7.0, enclosure_width: float = 2.5):
         self.calibration = calibration
@@ -22,14 +35,21 @@ class PositionTracker:
 
     def update(self, detection: Detection, timestamp: datetime) -> Track:
         x, y = self.calibration.pixel_to_meters(detection.x_pixel, detection.y_pixel)
-        # Clamp coordinates to valid enclosure range
-        x = min(max(x, 0.0), self.enclosure_length)
-        y = min(max(y, 0.0), self.enclosure_width)
-        speed = 0.0
-        if self.previous:
-            elapsed = max((timestamp - self.previous.timestamp).total_seconds(), 0.001)
-            speed = ((x - self.previous.x) ** 2 + (y - self.previous.y) ** 2) ** 0.5 / elapsed
-        track = Track(x, y, timestamp, speed)
+        track = _clamp_and_track(self.previous, x, y, timestamp, self.enclosure_length, self.enclosure_width)
+        self.previous = track
+        return track
+
+
+class RadarPositionTracker:
+    """Tracks a moving point given directly in enclosure metres, e.g. from a radar sensor."""
+
+    def __init__(self, enclosure_length: float = 7.0, enclosure_width: float = 2.5):
+        self.enclosure_length = enclosure_length
+        self.enclosure_width = enclosure_width
+        self.previous: Track | None = None
+
+    def update(self, x: float, y: float, timestamp: datetime) -> Track:
+        track = _clamp_and_track(self.previous, x, y, timestamp, self.enclosure_length, self.enclosure_width)
         self.previous = track
         return track
 

@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     mqtt_user: str | None = None
     mqtt_password: str | None = None
     mqtt_topic_prefix: str = "turtle_tracker/house"
+    radar_offset_length_meters: float = 0.0
+    radar_offset_width_meters: float = 0.0
+    radar_mirror_width: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS positions (
     y REAL NOT NULL,
     inside_house INTEGER NOT NULL DEFAULT 0,
     speed REAL NOT NULL DEFAULT 0,
-    confidence REAL NOT NULL DEFAULT 0
+    confidence REAL NOT NULL DEFAULT 0,
+    source TEXT NOT NULL DEFAULT 'camera'
 );
 CREATE INDEX IF NOT EXISTS idx_positions_timestamp ON positions(timestamp);
 CREATE TABLE IF NOT EXISTS events (
@@ -46,12 +47,18 @@ class Database:
     def initialize(self) -> None:
         with self.connect() as connection:
             connection.executescript(SCHEMA)
+            # Migration for databases created before the "source" column was added.
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(positions)")}
+            if "source" not in columns:
+                connection.execute("ALTER TABLE positions ADD COLUMN source TEXT NOT NULL DEFAULT 'camera'")
 
-    def insert_position(self, timestamp: str, x: float, y: float, inside_house: bool, speed: float, confidence: float) -> int:
+    def insert_position(
+        self, timestamp: str, x: float, y: float, inside_house: bool, speed: float, confidence: float, source: str = "camera"
+    ) -> int:
         with self.connect() as connection:
             cursor = connection.execute(
-                "INSERT INTO positions (timestamp, x, y, inside_house, speed, confidence) VALUES (?, ?, ?, ?, ?, ?)",
-                (timestamp, x, y, int(inside_house), speed, confidence),
+                "INSERT INTO positions (timestamp, x, y, inside_house, speed, confidence, source) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (timestamp, x, y, int(inside_house), speed, confidence, source),
             )
             return int(cursor.lastrowid)
 

@@ -5,6 +5,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <HTTPClient.h>
+#include <cstring>
 #include "esp_camera.h"
 #include "generated_secrets.h"
 
@@ -55,12 +56,70 @@ constexpr uint8_t HREF_GPIO_NUM = 23;
 constexpr uint8_t PCLK_GPIO_NUM = 22;
 constexpr unsigned long FRAME_INTERVAL_MS = 5000;
 
+// HLK-LD2450 radar UART2: sensor TX -> GPIO16 (RX2), sensor RX -> GPIO17 (TX2, unused for reading).
+constexpr int8_t RADAR_RX_GPIO_NUM = 16;
+constexpr int8_t RADAR_TX_GPIO_NUM = 17;
+constexpr unsigned long RADAR_BAUD_RATE = 256000;
+constexpr unsigned long RADAR_SEND_INTERVAL_MS = 1000;
+constexpr uint8_t RADAR_FRAME_HEADER[4] = {0xAA, 0xFF, 0x03, 0x00};
+constexpr uint8_t RADAR_FRAME_FOOTER[2] = {0x55, 0xCC};
+constexpr size_t RADAR_FRAME_LENGTH = 30;  // 4 header + 3 x 8 target bytes + 2 footer
+constexpr size_t RADAR_TARGET_LENGTH = 8;
+
 WiFiClient wifiClient;
 PubSubClient mqtt(wifiClient);
 WebServer server(80);
+HardwareSerial radarSerial(2);
+uint8_t radarBuffer[RADAR_FRAME_LENGTH];
+size_t radarBufferPos = 0;
 unsigned long lastFrame = 0;
+unsigned long lastRadarSend = 0;
 unsigned long lastMqttAttempt = 0;
 String baseTopic = String("turtle_tracker/") + TT_DEVICE_NAME;
+
+// Decodes a LD2450 coordinate/speed pair: bit 15 of the high byte is the sign flag
+// (set = positive), the remaining 15 bits are the magnitude.
+int16_t decodeRadarValue(uint8_t lowByte, uint8_t highByte) {
+  int16_t value = (int16_t)((highByte & 0x7F) << 8) | lowByte;
+  if ((highByte & 0x80) == 0) value = -value;
+  return value;
+}
+
+void sendRadarTargets() {
+  while (radarSerial.available()) {
+    uint8_t incoming = (uint8_t)radarSerial.read();
+    if (radarBufferPos == 0 && incoming != RADAR_FRAME_HEADER[0]) continue;
+    radarBuffer[radarBufferPos++] = incoming;
+    if (radarBufferPos < RADAR_FRAME_LENGTH) continue;
+    radarBufferPos = 0;
+    if (memcmp(radarBuffer, RADAR_FRAME_HEADER, sizeof(RADAR_FRAME_HEADER)) != 0) continue;
+    if (memcmp(radarBuffer + RADAR_FRAME_LENGTH - 2, RADAR_FRAME_FOOTER, sizeof(RADAR_FRAME_FOOTER)) != 0) continue;
+    if (millis() - lastRadarSend < RADAR_SEND_INTERVAL_MS) continue;
+    lastRadarSend = millis();
+
+    JsonDocument document;
+    JsonArray targets = document["targets"].to<JsonArray>();
+    for (uint8_t target = 0; target < 3; target++) {
+      const uint8_t* base = radarBuffer + 4 + target * RADAR_TARGET_LENGTH;
+      int16_t x = decodeRadarValue(base[0], base[1]);
+      int16_t y = decodeRadarValue(base[2], base[3]);
+      int16_t speed = decodeRadarValue(base[4], base[5]);
+      if (x == 0 && y == 0) continue;  // No target in this slot
+      JsonObject entry = targets.add<JsonObject>();
+      entry["x_mm"] = x;
+      entry["y_mm"] = y;
+      entry["speed_mm_s"] = speed * 10;
+    }
+    if (targets.size() == 0) return;
+    String payload;
+    serializeJson(document, payload);
+    HTTPClient http;
+    http.begin(String(TT_API_URL) + "/api/radar/" + TT_DEVICE_NAME);
+    http.addHeader("Content-Type", "application/json");
+    http.POST(payload);
+    http.end();
+  }
+}
 
 String topic(const char* suffix) { return baseTopic + "/" + suffix; }
 
@@ -174,6 +233,7 @@ void sendFrame() {
 
 void setup() {
   Serial.begin(115200);
+  radarSerial.begin(RADAR_BAUD_RATE, SERIAL_8N1, RADAR_RX_GPIO_NUM, RADAR_TX_GPIO_NUM);
   if (!setupCamera()) { Serial.println("Camera initialization failed"); delay(1000); ESP.restart(); }
   WiFi.mode(WIFI_STA);
   WiFi.begin(TT_WIFI_SSID, TT_WIFI_PASSWORD);
@@ -191,5 +251,6 @@ void loop() {
   server.handleClient();
   connectMqtt();
   mqtt.loop();
+  sendRadarTargets();
   if (millis() - lastFrame >= FRAME_INTERVAL_MS) { lastFrame = millis(); sendFrame(); }
 }

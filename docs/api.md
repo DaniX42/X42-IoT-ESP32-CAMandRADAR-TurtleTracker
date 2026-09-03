@@ -35,6 +35,20 @@ The service exposes OpenAPI documentation at `/docs`.
 
 `POST /api/mock/frame` runs the same path using a generated JPEG while camera hardware is unavailable.
 
+## Radar ingestion
+
+`POST /api/radar/{camera_id}` accepts an HLK-LD2450 target report and stores it as a position with `source: "radar"`:
+
+```json
+{
+  "targets": [
+    {"x_mm": 350, "y_mm": 4200, "speed_mm_s": 0}
+  ]
+}
+```
+
+Only the first target is used (the enclosure has a single tracked tortoise). Coordinates are in the sensor's native millimetre frame and are converted to enclosure metres via `RadarCalibration` (`calibration.py`), configurable with the `radar_offset_length_meters`, `radar_offset_width_meters`, and `radar_mirror_width` settings. Radar positions are accepted with `confidence: 1.0` and share the same `positions` table and `/api/position`, `/api/history`, `/api/heatmap` endpoints as camera-derived positions.
+
 ## Latest frame
 
 `GET /api/frames/{camera_id}/latest` returns the latest valid JPEG received for the camera with `Content-Type: image/jpeg`. It returns `404` until the first frame has been received. The endpoint is intended for Home Assistant's Generic Camera integration.

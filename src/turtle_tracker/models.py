@@ -10,12 +10,25 @@ class Position(BaseModel):
     inside_house: bool = False
     speed: float = Field(default=0, ge=0)
     confidence: float = Field(default=0, ge=0, le=1)
+    source: str = "camera"
 
 
 class IngestResponse(BaseModel):
     accepted: bool
     position: Position | None = None
     reason: str | None = None
+
+
+class RadarTarget(BaseModel):
+    """One HLK-LD2450 target report, in the sensor's native millimetre coordinates."""
+
+    x_mm: int
+    y_mm: int
+    speed_mm_s: int = 0
+
+
+class RadarFrame(BaseModel):
+    targets: list[RadarTarget] = []
 
 
 class HeatmapPoint(BaseModel):

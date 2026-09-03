@@ -32,6 +32,23 @@ def test_mock_frame_is_persisted(tmp_path: Path):
     assert len(client.get("/api/history").json()) == 1
 
 
+def test_radar_target_is_persisted(tmp_path: Path):
+    client = make_client(tmp_path)
+    response = client.post("/api/radar/turtle-cam-outdoor", json={"targets": [{"x_mm": 500, "y_mm": 2000, "speed_mm_s": 0}]})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["accepted"] is True
+    assert body["position"]["source"] == "radar"
+    assert client.get("/api/position").json()["source"] == "radar"
+
+
+def test_radar_without_targets_is_rejected(tmp_path: Path):
+    client = make_client(tmp_path)
+    response = client.post("/api/radar/turtle-cam-outdoor", json={"targets": []})
+    assert response.status_code == 200
+    assert response.json()["accepted"] is False
+
+
 def test_rejects_invalid_jpeg(tmp_path: Path):
     client = make_client(tmp_path)
     response = client.post("/api/frames/outdoor", files={"file": ("frame.jpg", b"invalid", "image/jpeg")})
