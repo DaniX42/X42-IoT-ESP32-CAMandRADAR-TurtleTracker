@@ -1,7 +1,10 @@
 services:
   app:
     container_name: X42-IoT-ESP32-CAMandRADAR-TurtleTracker
-    image: latest
+    image: x42-iot-esp32-camandradar-turtle-tracker:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     network_mode: host
     volumes:
       - /opt/X42-IoT-ESP32-CAMandRADAR-TurtleTracker/data:/data
