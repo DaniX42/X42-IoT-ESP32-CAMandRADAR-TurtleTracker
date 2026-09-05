@@ -38,27 +38,28 @@
 #endif
 
 namespace {
-constexpr uint8_t PWDN_GPIO_NUM = 32;
-constexpr uint8_t RESET_GPIO_NUM = -1;
-constexpr uint8_t XCLK_GPIO_NUM = 0;
-constexpr uint8_t SIOD_GPIO_NUM = 26;
-constexpr uint8_t SIOC_GPIO_NUM = 27;
-constexpr uint8_t Y9_GPIO_NUM = 35;
-constexpr uint8_t Y8_GPIO_NUM = 34;
-constexpr uint8_t Y7_GPIO_NUM = 39;
-constexpr uint8_t Y6_GPIO_NUM = 36;
-constexpr uint8_t Y5_GPIO_NUM = 21;
-constexpr uint8_t Y4_GPIO_NUM = 19;
-constexpr uint8_t Y3_GPIO_NUM = 18;
-constexpr uint8_t Y2_GPIO_NUM = 5;
-constexpr uint8_t VSYNC_GPIO_NUM = 25;
-constexpr uint8_t HREF_GPIO_NUM = 23;
-constexpr uint8_t PCLK_GPIO_NUM = 22;
+constexpr int8_t PWDN_GPIO_NUM = 32;
+constexpr int8_t RESET_GPIO_NUM = -1;
+constexpr int8_t XCLK_GPIO_NUM = 0;
+constexpr int8_t SIOD_GPIO_NUM = 26;
+constexpr int8_t SIOC_GPIO_NUM = 27;
+constexpr int8_t Y9_GPIO_NUM = 35;
+constexpr int8_t Y8_GPIO_NUM = 34;
+constexpr int8_t Y7_GPIO_NUM = 39;
+constexpr int8_t Y6_GPIO_NUM = 36;
+constexpr int8_t Y5_GPIO_NUM = 21;
+constexpr int8_t Y4_GPIO_NUM = 19;
+constexpr int8_t Y3_GPIO_NUM = 18;
+constexpr int8_t Y2_GPIO_NUM = 5;
+constexpr int8_t VSYNC_GPIO_NUM = 25;
+constexpr int8_t HREF_GPIO_NUM = 23;
+constexpr int8_t PCLK_GPIO_NUM = 22;
 constexpr unsigned long FRAME_INTERVAL_MS = 5000;
 
-// HLK-LD2450 radar UART2: sensor TX -> GPIO16 (RX2), sensor RX -> GPIO17 (TX2, unused for reading).
-constexpr int8_t RADAR_RX_GPIO_NUM = 16;
-constexpr int8_t RADAR_TX_GPIO_NUM = 17;
+// GPIO16/17 are used by PSRAM on the AI Thinker ESP32-CAM.
+// HLK-LD2450 UART2: sensor TX -> GPIO13 (RX2), sensor RX -> GPIO14 (TX2, optional).
+constexpr int8_t RADAR_RX_GPIO_NUM = 13;
+constexpr int8_t RADAR_TX_GPIO_NUM = 14;
 constexpr unsigned long RADAR_BAUD_RATE = 256000;
 constexpr unsigned long RADAR_SEND_INTERVAL_MS = 1000;
 constexpr uint8_t RADAR_FRAME_HEADER[4] = {0xAA, 0xFF, 0x03, 0x00};

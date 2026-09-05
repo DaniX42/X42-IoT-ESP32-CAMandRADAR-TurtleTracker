@@ -1,0 +1,15 @@
+services:
+  app:
+    container_name: X42-IoT-ESP32-CAMandRADAR-TurtleTracker
+    image: latest
+    network_mode: host
+    volumes:
+      - /opt/X42-IoT-ESP32-CAMandRADAR-TurtleTracker/data:/data
+    restart: unless-stopped
+    privileged: true
+    security_opt:
+      - apparmor=unconfined
+    environment:
+      TZ: Europe/Vienna
+      DATABASE_PATH: /data/turtle_tracker.db
+      MOTION_CROPS_PATH: /data/motion_crops
