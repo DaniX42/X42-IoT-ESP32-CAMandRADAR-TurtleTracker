@@ -40,6 +40,10 @@ def test_radar_target_is_persisted(tmp_path: Path):
     assert body["accepted"] is True
     assert body["position"]["source"] == "radar"
     assert client.get("/api/position").json()["source"] == "radar"
+    targets = client.get("/api/radar/turtle-cam-outdoor/targets")
+    assert targets.status_code == 200
+    assert targets.json()["targets"] == [{"x_mm": 500, "y_mm": 2000, "speed_mm_s": 0}]
+    assert client.get("/api/radar/turtle-cam-outdoor/view").status_code == 200
 
 
 def test_radar_without_targets_is_rejected(tmp_path: Path):

@@ -49,6 +49,10 @@ The service exposes OpenAPI documentation at `/docs`.
 
 Only the first target is used (the enclosure has a single tracked tortoise). Coordinates are in the sensor's native millimetre frame and are converted to enclosure metres via `RadarCalibration` (`calibration.py`), configurable with the `radar_offset_length_meters`, `radar_offset_width_meters`, and `radar_mirror_width` settings. Radar positions are accepted with `confidence: 1.0` and share the same `positions` table and `/api/position`, `/api/history`, `/api/heatmap` endpoints as camera-derived positions.
 
+`GET /api/radar/{camera_id}/targets` returns the latest complete target report received from the radar. It returns `404` until the first report arrives.
+
+`GET /api/radar/{camera_id}/view` provides a live browser radar view. It polls the targets endpoint every second, plots up to three targets in the LD2450's native coordinate frame, and displays their X/Y positions in millimetres.
+
 ## Latest frame
 
 `GET /api/frames/{camera_id}/latest` returns the latest valid JPEG received for the camera with `Content-Type: image/jpeg`. It returns `404` until the first frame has been received. The endpoint is intended for Home Assistant's Generic Camera integration.

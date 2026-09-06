@@ -169,6 +169,7 @@ def create_app(settings: Settings | None = None, database: Database | None = Non
     latest_detections: dict[str, object] = {}  # Store Detection objects for visualization
     latest_detection_times: dict[str, datetime] = {}  # Store timestamp of last detection
     detection_history: dict[str, list[tuple[Detection, datetime]]] = {}  # Store top-3 detections with timestamps
+    latest_radar_frames: dict[str, tuple[RadarFrame, datetime]] = {}
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -530,11 +531,12 @@ load();
     async def ingest_radar(camera_id: str, frame: RadarFrame) -> IngestResponse:
         if not camera_id.strip():
             raise HTTPException(status_code=400, detail="camera_id is required")
+        timestamp = _utc_now()
+        latest_radar_frames[camera_id] = (frame, timestamp)
         if not frame.targets:
             return IngestResponse(accepted=False, reason="No radar target detected")
         target = frame.targets[0]
         x, y = radar_calibration.target_to_meters(target.x_mm, target.y_mm)
-        timestamp = _utc_now()
         track = radar_tracker.update(x, y, timestamp)
         position = Position(
             timestamp=timestamp,
@@ -550,6 +552,36 @@ load();
         )
         mqtt_publisher.publish_position(position.x, position.y, position.speed, position.confidence)
         return IngestResponse(accepted=True, position=position)
+
+    @app.get("/api/radar/{camera_id}/targets")
+    def latest_radar_targets(camera_id: str) -> dict[str, object]:
+        latest = latest_radar_frames.get(camera_id)
+        if latest is None:
+            raise HTTPException(status_code=404, detail="No radar data received")
+        frame, timestamp = latest
+        return {"camera_id": camera_id, "timestamp": timestamp, "targets": [target.model_dump() for target in frame.targets]}
+
+    @app.get("/api/radar/{camera_id}/view", response_class=HTMLResponse)
+    def radar_view(camera_id: str) -> HTMLResponse:
+        return HTMLResponse(f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LD2450 radar</title><style>
+body {{ margin: 0; min-height: 100vh; display: grid; place-items: center; background: #e7edf0; color: #152329; font: 16px Georgia, serif; }}
+main {{ width: min(92vw, 680px); }} h1 {{ margin: 0 0 8px; font-size: 24px; }} p {{ margin: 0 0 16px; color: #4a5b62; }}
+#radar {{ width: 100%; aspect-ratio: 1; display: block; background: #10262d; border: 3px solid #2a5660; }}
+</style></head><body><main><h1>LD2450 radar: {camera_id}</h1><p id="status">Waiting for radar data</p><canvas id="radar" width="680" height="680"></canvas></main><script>
+const canvas = document.querySelector('#radar'), ctx = canvas.getContext('2d'), status = document.querySelector('#status');
+function draw(targets) {{
+  const size = canvas.width, originX = size / 2, originY = size - 28, range = 6000, scale = (size - 56) / range;
+  ctx.fillStyle = '#10262d'; ctx.fillRect(0, 0, size, size); ctx.strokeStyle = '#31545b'; ctx.lineWidth = 1;
+  for (let distance = 1000; distance <= range; distance += 1000) {{ ctx.beginPath(); ctx.arc(originX, originY, distance * scale, Math.PI, Math.PI * 2); ctx.stroke(); }}
+  ctx.beginPath(); ctx.moveTo(originX, originY); ctx.lineTo(24, 24); ctx.moveTo(originX, originY); ctx.lineTo(size - 24, 24); ctx.stroke();
+  ctx.fillStyle = '#9dd6dc'; ctx.fillText('0 m', originX + 8, originY - 8); ctx.fillText('6 m', originX + 8, 28);
+  targets.forEach((target, index) => {{ const x = originX + target.x_mm * scale, y = originY - target.y_mm * scale; ctx.fillStyle = '#f6c85f'; ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2); ctx.fill(); ctx.fillText(`T${{index + 1}}  x:${{target.x_mm}} y:${{target.y_mm}} mm`, x + 12, y - 10); }});
+}}
+async function update() {{ try {{ const response = await fetch('/api/radar/{camera_id}/targets'); if (!response.ok) throw new Error(); const data = await response.json(); draw(data.targets); status.textContent = `${{data.targets.length}} target(s), updated ${{new Date(data.timestamp).toLocaleTimeString()}}`; }} catch {{ draw([]); status.textContent = 'Waiting for radar data'; }} }}
+update(); setInterval(update, 1000);
+</script></body></html>""")
 
     return app
 
